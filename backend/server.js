@@ -8,12 +8,19 @@ dns.setServers(['8.8.8.8']);
 const studentRoutes = require('./routes/studentRoutes');
 
 const app = express();
+
 app.use(cors({
   origin: [
     'http://localhost:5500',
-    'http://127.0.0.1:5500'
-  ]
+    'http://127.0.0.1:5500',
+    'https://dreamy-elf-3087af.netlify.app'
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type']
 }));
+
+app.use(express.json());
+
 
 app.use(express.json());
 const PORT = process.env.PORT || 5000;
