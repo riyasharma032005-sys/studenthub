@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="A cloud-based Student Information Management System." />
+  <title>StudentHub | Student Information Management</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#top"><span class="brand-icon">S</span><span>StudentHub<small>INFORMATION MANAGEMENT</small></span></a>
+    <span class="cloud-pill"><span class="pulse"></span> Cloud-connected student records</span>
+  </header>
+  <main id="top" class="container">
+    <section class="hero">
+      <div><p class="eyebrow">STUDENT ADMINISTRATION</p><h1>Student Information<br><span>Management System</span></h1><p class="hero-copy">Manage student records from one simple workspace. Add, find, update and maintain student information.</p></div>
+      <div class="hero-art" aria-hidden="true"><div class="art-circle">✦</div><div class="art-card"><span>STUDENT DATA</span><strong>Organized.</strong><strong>Accessible.</strong><div class="art-bars"><i></i><i></i><i></i><i></i></div></div></div>
+    </section>
+    <section class="stats" aria-label="Summary">
+      <article class="stat-card"><span class="stat-icon blue">▤</span><div><p>Total records</p><strong id="totalCount">—</strong></div></article>
+      <article class="stat-card"><span class="stat-icon violet">⌕</span><div><p>Search status</p><strong id="searchStatus">All students</strong></div></article>
+      <article class="stat-card"><span class="stat-icon green">✓</span><div><p>API status</p><strong id="apiStatus">Checking…</strong></div></article>
+    </section>
+    <div id="notice" class="notice" role="status" hidden></div>
+    <section class="workspace">
+      <article class="panel form-panel">
+        <div class="panel-heading"><div><p class="eyebrow">RECORD DETAILS</p><h2 id="formTitle">Add a student</h2></div><span class="step-number">01</span></div>
+        <p class="muted">Fields marked <b>*</b> are required.</p>
+        <form id="studentForm">
+          <input type="hidden" id="recordId" />
+          <label for="studentId">Student ID <b>*</b></label><input id="studentId" name="studentId" placeholder="e.g. ST101" required maxlength="40" />
+          <label for="name">Full name <b>*</b></label><input id="name" name="name" placeholder="Enter student's full name" required maxlength="100" />
+          <label for="email">Email address <b>*</b></label><input id="email" name="email" type="email" placeholder="student@example.com" required maxlength="150" />
+          <div class="two-col"><div><label for="department">Department <b>*</b></label><input id="department" name="department" placeholder="Computer Engineering" required maxlength="100" /></div><div><label for="semester">Semester <b>*</b></label><select id="semester" name="semester" required><option value="">Select</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></div></div>
+          <label for="contact">Contact number</label><input id="contact" name="contact" type="tel" placeholder="Optional" maxlength="20" />
+          <div class="form-actions"><button class="btn btn-primary" type="submit" id="saveButton">＋ Add student</button><button class="btn btn-light" type="button" id="cancelEdit" hidden>Cancel</button></div>
+        </form>
+      </article>
+      <article class="panel records-panel">
+        <div class="panel-heading records-heading"><div><p class="eyebrow">STUDENT DIRECTORY</p><h2>Student records</h2></div><span class="count-chip" id="visibleCount">0 records</span></div>
+        <div class="search-row"><div class="search-box"><span>⌕</span><input id="searchInput" type="search" placeholder="Search ID, name, email, department…" aria-label="Search students" /></div><button class="btn btn-light" id="refreshButton" type="button" title="Refresh records">↻</button></div>
+        <div class="table-wrap"><table><thead><tr><th>STUDENT</th><th>DEPARTMENT</th><th>SEM.</th><th>ACTIONS</th></tr></thead><tbody id="studentRows"><tr><td colspan="4" class="empty">Loading student records…</td></tr></tbody></table></div>
+        <p class="table-footnote">Records are retrieved from the connected MongoDB Atlas database.</p>
+      </article>
+    </section>
+    <footer><span>StudentHub · Three-Tier Cloud Application</span><span>Frontend · REST API · Cloud Database</span></footer>
+  </main>
+  <script src="config.js"></script><script src="script.js"></script>
+</body>
+</html>
