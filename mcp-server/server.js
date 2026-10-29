@@ -7,14 +7,31 @@ const app = express();
 app.use(express.json({ limit: '1mb' }));
 
 const editableFiles = new Set(['index.html', 'style.css']);
-const readableFiles = new Set(['index.html', 'style.css', 'script.js']);
+const readableFiles = new Set([
+  'index.html',
+  'style.css',
+  'script.js'
+]);
+
+const MAX_FILE_SIZE = 200_000;
 
 function getGitHubConfig() {
-  const { GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO, GITHUB_BRANCH } =
-    process.env;
+  const {
+    GITHUB_TOKEN,
+    GITHUB_OWNER,
+    GITHUB_REPO,
+    GITHUB_BRANCH
+  } = process.env;
 
-  if (!GITHUB_TOKEN || !GITHUB_OWNER || !GITHUB_REPO || !GITHUB_BRANCH) {
-    throw new Error('GitHub environment variables are not configured.');
+  if (
+    !GITHUB_TOKEN ||
+    !GITHUB_OWNER ||
+    !GITHUB_REPO ||
+    !GITHUB_BRANCH
+  ) {
+    throw new Error(
+      'GitHub environment variables are not configured.'
+    );
   }
 
   return {
@@ -28,33 +45,49 @@ function getGitHubConfig() {
 async function githubRequest(endpoint, options = {}) {
   const config = getGitHubConfig();
 
-  const response = await fetch(
-    `https://api.github.com/repos/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}${endpoint}`,
-    {
-      ...options,
-      headers: {
-        Accept: 'application/vnd.github+json',
-        Authorization: `Bearer ${config.token}`,
-        'X-GitHub-Api-Version': '2022-11-28',
-        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-        ...options.headers
-      }
-    }
-  );
+  const url =
+    `https://api.github.com/repos/` +
+    `${encodeURIComponent(config.owner)}/` +
+    `${encodeURIComponent(config.repo)}` +
+    endpoint;
 
-  const text = await response.text();
-  let data;
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      Accept: 'application/vnd.github+json',
+      Authorization: `Bearer ${config.token}`,
+      'X-GitHub-Api-Version': '2022-11-28',
+      ...(options.body
+        ? { 'Content-Type': 'application/json' }
+        : {}),
+      ...options.headers
+    },
+    signal: AbortSignal.timeout(20_000)
+  });
+
+  const responseText = await response.text();
+
+  let data = {};
 
   try {
-    data = text ? JSON.parse(text) : {};
+    data = responseText
+      ? JSON.parse(responseText)
+      : {};
   } catch {
-    throw new Error(`GitHub returned an unreadable response (${response.status}).`);
+    throw new Error(
+      `GitHub returned an unreadable response (${response.status}).`
+    );
   }
 
   if (!response.ok) {
-    console.error('GitHub API error:', response.status, data.message || 'Request failed');
+    console.error(
+      'GitHub API request failed:',
+      response.status
+    );
+
     throw new Error(
-      `GitHub request failed (${response.status}). Check repository permissions and branch settings.`
+      `GitHub request failed (${response.status}). ` +
+      'Check the PAT permissions, repository and branch.'
     );
   }
 
@@ -62,8 +95,13 @@ async function githubRequest(endpoint, options = {}) {
 }
 
 function validateFileName(fileName, allowedFiles) {
-  if (typeof fileName !== 'string' || !allowedFiles.has(fileName)) {
-    throw new Error(`Allowed files: ${[...allowedFiles].join(', ')}`);
+  if (
+    typeof fileName !== 'string' ||
+    !allowedFiles.has(fileName)
+  ) {
+    throw new Error(
+      `Allowed files: ${[...allowedFiles].join(', ')}`
+    );
   }
 
   return `frontend/${fileName}`;
@@ -71,25 +109,53 @@ function validateFileName(fileName, allowedFiles) {
 
 async function readGitHubFile(fileName) {
   const config = getGitHubConfig();
-  const repoPath = validateFileName(fileName, readableFiles);
 
-  const file = await githubRequest(
-    `/contents/${repoPath.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(config.branch)}`
+  const repoPath = validateFileName(
+    fileName,
+    readableFiles
   );
 
-  if (file.type !== 'file' || !file.content) {
-    throw new Error(`frontend/${fileName} is not a readable file.`);
+  const encodedPath = repoPath
+    .split('/')
+    .map(encodeURIComponent)
+    .join('/');
+
+  const file = await githubRequest(
+    `/contents/${encodedPath}?ref=${encodeURIComponent(config.branch)}`
+  );
+
+  if (
+    file.type !== 'file' ||
+    typeof file.content !== 'string'
+  ) {
+    throw new Error(
+      `frontend/${fileName} is not a readable file.`
+    );
   }
 
-  return Buffer.from(file.content, 'base64').toString('utf8');
+  if (file.encoding !== 'base64') {
+    throw new Error(
+      `Unexpected encoding for frontend/${fileName}.`
+    );
+  }
+
+  return Buffer.from(
+    file.content.replace(/\s/g, ''),
+    'base64'
+  ).toString('utf8');
 }
 
 function authenticate(req, res, next) {
   const expected = process.env.MCP_AUTH_TOKEN;
   const supplied = req.headers.authorization;
 
-  if (!expected || supplied !== `Bearer ${expected}`) {
-    return res.status(401).json({ error: 'Unauthorized' });
+  if (
+    !expected ||
+    supplied !== `Bearer ${expected}`
+  ) {
+    return res.status(401).json({
+      error: 'Unauthorized'
+    });
   }
 
   next();
@@ -98,7 +164,7 @@ function authenticate(req, res, next) {
 function createMcpServer() {
   const server = new McpServer({
     name: 'studenthub-frontend-editor',
-    version: '1.1.0'
+    version: '1.2.0'
   });
 
   server.tool(
@@ -106,16 +172,18 @@ function createMcpServer() {
     'List frontend files available for StudentHub UI work.',
     {},
     async () => ({
-      content: [{
-        type: 'text',
-        text: [
-          'Repository: configured StudentHub GitHub repository.',
-          'Branch: configured GITHUB_BRANCH.',
-          'Readable files: frontend/index.html, frontend/style.css, frontend/script.js.',
-          'Publishable files: frontend/index.html, frontend/style.css.',
-          'All other files are excluded from publishing.'
-        ].join('\n')
-      }]
+      content: [
+        {
+          type: 'text',
+          text: [
+            'Repository: configured StudentHub GitHub repository.',
+            'Branch: configured GITHUB_BRANCH.',
+            'Readable files: frontend/index.html, frontend/style.css, frontend/script.js.',
+            'Publishable files: frontend/index.html, frontend/style.css.',
+            'Backend, database, config.js and script.js are not publishable through this tool.'
+          ].join('\n')
+        }
+      ]
     })
   );
 
@@ -123,22 +191,40 @@ function createMcpServer() {
     'read_frontend_file',
     'Read the latest version of an allowed StudentHub frontend file from GitHub.',
     {
-      fileName: z.enum(['index.html', 'style.css', 'script.js'])
+      fileName: z.enum([
+        'index.html',
+        'style.css',
+        'script.js'
+      ])
     },
     async ({ fileName }) => {
       try {
         const content = await readGitHubFile(fileName);
 
         return {
-          content: [{
-            type: 'text',
-            text: `Latest GitHub file: frontend/${fileName}\n\n${content}`
-          }]
+          content: [
+            {
+              type: 'text',
+              text:
+                `Latest GitHub file: frontend/${fileName}\n\n` +
+                content
+            }
+          ]
         };
       } catch (error) {
+        console.error(
+          'Frontend read failed:',
+          error.message
+        );
+
         return {
           isError: true,
-          content: [{ type: 'text', text: error.message }]
+          content: [
+            {
+              type: 'text',
+              text: `Read failed: ${error.message}`
+            }
+          ]
         };
       }
     }
@@ -146,13 +232,19 @@ function createMcpServer() {
 
   server.tool(
     'publish_frontend_changes',
-    'Publish reviewed HTML/CSS changes to the configured GitHub branch in one commit. Only index.html and style.css can be changed.',
+    'Publish HTML/CSS changes to the configured GitHub branch in one commit. Only index.html and style.css can be changed.',
     {
-      changeSummary: z.string().min(1).max(500),
-      files: z.array(z.object({
-        fileName: z.enum(['index.html', 'style.css']),
-        content: z.string().min(1).max(200000)
-      })).min(1).max(2)
+      changeSummary: z.string().trim().min(1).max(500),
+
+      files: z.array(
+        z.object({
+          fileName: z.enum([
+            'index.html',
+            'style.css'
+          ]),
+          content: z.string().min(1).max(MAX_FILE_SIZE)
+        })
+      ).min(1).max(2)
     },
     async ({ changeSummary, files }) => {
       try {
@@ -160,39 +252,64 @@ function createMcpServer() {
         const seen = new Set();
 
         for (const file of files) {
-          validateFileName(file.fileName, editableFiles);
+          validateFileName(
+            file.fileName,
+            editableFiles
+          );
 
           if (seen.has(file.fileName)) {
-            throw new Error(`Duplicate file supplied: ${file.fileName}`);
+            throw new Error(
+              `Duplicate file supplied: ${file.fileName}`
+            );
           }
 
           seen.add(file.fileName);
         }
 
-        // Read the current branch head immediately before preparing the commit.
+        const safeSummary = changeSummary
+          .replace(/[\r\n]+/g, ' ')
+          .trim()
+          .slice(0, 500);
+
+        if (!safeSummary) {
+          throw new Error(
+            'A valid change summary is required.'
+          );
+        }
+
+        // Read the current branch head.
         const ref = await githubRequest(
           `/git/ref/heads/${encodeURIComponent(config.branch)}`
         );
+
         const parentSha = ref.object.sha;
 
+        // Read the parent commit and its tree.
         const parentCommit = await githubRequest(
           `/git/commits/${parentSha}`
         );
+
         const baseTreeSha = parentCommit.tree.sha;
 
-        // Create blobs for the approved files.
+        // Create Git blobs for approved files.
         const treeEntries = [];
 
         for (const file of files) {
-          const repoPath = validateFileName(file.fileName, editableFiles);
+          const repoPath = validateFileName(
+            file.fileName,
+            editableFiles
+          );
 
-          const blob = await githubRequest('/git/blobs', {
-            method: 'POST',
-            body: JSON.stringify({
-              content: file.content,
-              encoding: 'utf-8'
-            })
-          });
+          const blob = await githubRequest(
+            '/git/blobs',
+            {
+              method: 'POST',
+              body: JSON.stringify({
+                content: file.content,
+                encoding: 'utf-8'
+              })
+            }
+          );
 
           treeEntries.push({
             path: repoPath,
@@ -202,30 +319,33 @@ function createMcpServer() {
           });
         }
 
-        // Create a new tree based on the existing repository tree.
-        const tree = await githubRequest('/git/trees', {
-          method: 'POST',
-          body: JSON.stringify({
-            base_tree: baseTreeSha,
-            tree: treeEntries
-          })
-        });
+        // Create a tree based on the existing repository tree.
+        const tree = await githubRequest(
+          '/git/trees',
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              base_tree: baseTreeSha,
+              tree: treeEntries
+            })
+          }
+        );
 
-        const safeSummary = changeSummary
-          .replace(/[\r\n]+/g, ' ')
-          .trim()
-          .slice(0, 500);
+        // Create one commit containing all changed files.
+        const commit = await githubRequest(
+          '/git/commits',
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              message:
+                `Update StudentHub frontend: ${safeSummary}`,
+              tree: tree.sha,
+              parents: [parentSha]
+            })
+          }
+        );
 
-        const commit = await githubRequest('/git/commits', {
-          method: 'POST',
-          body: JSON.stringify({
-            message: `Update StudentHub frontend: ${safeSummary}`,
-            tree: tree.sha,
-            parents: [parentSha]
-          })
-        });
-
-        // Non-force update: do not overwrite a newer branch head.
+        // Update the branch without force-pushing.
         await githubRequest(
           `/git/refs/heads/${encodeURIComponent(config.branch)}`,
           {
@@ -238,28 +358,37 @@ function createMcpServer() {
         );
 
         return {
-          content: [{
-            type: 'text',
-            text: [
-              'GitHub publish successful.',
-              `Branch: ${config.branch}`,
-              `Files: ${files.map(f => `frontend/${f.fileName}`).join(', ')}`,
-              `Commit: ${commit.sha}`,
-              `Summary: ${safeSummary}`,
-              'Netlify should start its configured deployment if the main branch is connected to the site.',
-              'Check the GitHub commit and Netlify deploy status to confirm completion.'
-            ].join('\n')
-          }]
+          content: [
+            {
+              type: 'text',
+              text: [
+                'GitHub publish successful.',
+                `Branch: ${config.branch}`,
+                `Files: ${files.map(
+                  file => `frontend/${file.fileName}`
+                ).join(', ')}`,
+                `Commit: ${commit.sha}`,
+                `Summary: ${safeSummary}`,
+                `Repository: ${config.owner}/${config.repo}`,
+                'Check GitHub and Netlify to confirm deployment status.'
+              ].join('\n')
+            }
+          ]
         };
       } catch (error) {
-        console.error('Frontend publish failed:', error.message);
+        console.error(
+          'Frontend publish failed:',
+          error.message
+        );
 
         return {
           isError: true,
-          content: [{
-            type: 'text',
-            text: `Publish failed: ${error.message}`
-          }]
+          content: [
+            {
+              type: 'text',
+              text: `Publish failed: ${error.message}`
+            }
+          ]
         };
       }
     }
@@ -289,26 +418,41 @@ app.post('/mcp', authenticate, async (req, res) => {
 
   try {
     await server.connect(transport);
-    await transport.handleRequest(req, res, req.body);
+    await transport.handleRequest(
+      req,
+      res,
+      req.body
+    );
   } catch (error) {
-    console.error('MCP request failed:', error.message);
+    console.error(
+      'MCP request failed:',
+      error.message
+    );
 
     if (!res.headersSent) {
-      res.status(500).json({ error: 'MCP request failed' });
+      res.status(500).json({
+        error: 'MCP request failed'
+      });
     }
   }
 });
 
 app.get('/mcp', authenticate, (_req, res) => {
-  res.status(405).set('Allow', 'POST').send('Use POST for MCP requests.');
+  res.status(405)
+    .set('Allow', 'POST')
+    .send('Use POST for MCP requests.');
 });
 
 app.delete('/mcp', authenticate, (_req, res) => {
-  res.status(405).send('Stateless MCP sessions are not supported.');
+  res.status(405).send(
+    'Stateless MCP sessions are not supported.'
+  );
 });
 
 const port = Number(process.env.PORT || 3000);
 
 app.listen(port, '0.0.0.0', () => {
-  console.log(`StudentHub MCP server listening on port ${port}`);
+  console.log(
+    `StudentHub MCP server listening on port ${port}`
+  );
 });
