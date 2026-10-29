@@ -404,7 +404,7 @@ app.get('/health', (_req, res) => {
   });
 });
 
-app.post('/mcp', authenticate, async (req, res) => {
+app.post('/mcp', async (req, res) => {
   const server = createMcpServer();
 
   const transport = new StreamableHTTPServerTransport({
@@ -437,13 +437,13 @@ app.post('/mcp', authenticate, async (req, res) => {
   }
 });
 
-app.get('/mcp', authenticate, (_req, res) => {
+app.get('/mcp', (_req, res) => {
   res.status(405)
     .set('Allow', 'POST')
     .send('Use POST for MCP requests.');
 });
 
-app.delete('/mcp', authenticate, (_req, res) => {
+app.delete('/mcp', (_req, res) => {
   res.status(405).send(
     'Stateless MCP sessions are not supported.'
   );
