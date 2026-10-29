@@ -12,6 +12,9 @@
   --primary: #4f46e5;
   --primary-dark: #4338ca;
   --primary-soft: #eef2ff;
+  --pink: #ec4899;
+  --pink-dark: #db2777;
+  --pink-darker: #be185d;
   --green: #059669;
   --red: #dc2626;
   --radius: 16px;
@@ -199,8 +202,9 @@ select {
 .btn:hover { transform: translateY(-1px); }
 .btn:active { transform: translateY(0); }
 .btn:focus-visible, .icon-btn:focus-visible { outline: 3px solid rgba(79, 70, 229, .35); outline-offset: 2px; }
-.btn-primary { flex: 1; background: linear-gradient(135deg, #6366f1, var(--primary)); color: #fff; box-shadow: 0 8px 18px -6px rgba(79, 70, 229, .55); }
-.btn-primary:hover { background: linear-gradient(135deg, #4f46e5, var(--primary-dark)); }
+.btn-primary { flex: 1; background: linear-gradient(135deg, var(--pink), var(--pink-dark)); color: #fff; box-shadow: 0 8px 18px -6px rgba(236, 72, 153, .55); }
+.btn-primary:hover { background: linear-gradient(135deg, var(--pink-dark), var(--pink-darker)); }
+.btn-primary:focus-visible { outline-color: rgba(236, 72, 153, .4); }
 .btn-light { background: #f8fafc; color: var(--ink-2); border: 1px solid var(--line); }
 .btn-light:hover { background: #f1f5f9; }
 button:disabled { opacity: .6; cursor: wait; transform: none; }
